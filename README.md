@@ -45,7 +45,25 @@ worked out".
 
 ---
 
-## Running it
+## Installing it
+
+The built installer is at `dist\GrowBoard-Setup-1.0.0.exe`. Double-click it —
+it installs per-user with desktop and Start-menu shortcuts, no administrator
+prompt. Windows SmartScreen will warn because the installer is not code-signed;
+choose **More info -> Run anyway**.
+
+Two one-time steps afterwards:
+
+1. **Settings -> Connection** — enter the `dev_readonly` password once. It is
+   deliberately not in the installer (release files are public), and is stored
+   encrypted under `%APPDATA%\Grow Board` on this PC only.
+2. **Settings -> Application** — tick *Start automatically with Windows*.
+
+Updates are checked against GitHub Releases and **always ask before installing**,
+so nothing can interrupt billing. Full setup and release instructions are in
+[RELEASING.md](RELEASING.md).
+
+## Running from source
 
 ### First time
 
