@@ -116,21 +116,26 @@ changed on the Settings page is saved separately and overrides the file.
 ```json
 {
   "sql":  { "server": "DESKTOP-H2T0P2H", "adminDb": "DLTAdmindb",
-            "user": "dev_readonly", "password": "..." },
+            "user": "dev_readonly", "password": "" },
   "business": { "openHour": 8, "closeHour": 22 },
   "goal": { "growthTargetPct": 5, "lookbackWeeks": 6, "minGoal": 5000 },
   "notifications": { "morningGoal": "09:30", "middayCheck": "14:00",
                      "eveningPush": "18:00", "closingResult": "21:30" },
-  "app": { "autoStart": true, "startMinimised": false, "refreshSeconds": 60 }
+  "app": { "autoStart": true, "startMinimised": false, "refreshSeconds": 60 },
+  "update": { "enabled": false, "owner": "", "repo": "", "checkEveryHours": 6 }
 }
 ```
 
 The app resolves the current financial-year database automatically from
 `DLTAdmindb.dbo.dbmaster`, so it keeps working on 1 April without any change.
 
-> **Note on the password.** `config.json` holds the read-only SQL login in plain
-> text, because the app needs it to connect. Keep the folder on the shop PC and
-> do not share it. The login can only read; it cannot change your data.
+> **Where the password lives.** `password` in `config.json` is deliberately
+> empty and must stay that way. Release builds are published publicly on GitHub
+> for auto-update, so anything in the repository or the installer is public.
+> The password is entered once on the Settings page and kept encrypted under
+> `%APPDATA%\Grow Board` on that machine only. Command-line tools read it from
+> the same place, so `npm run probe` works without it ever being in a file you
+> might commit.
 
 ---
 
