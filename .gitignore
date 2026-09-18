@@ -1,0 +1,9 @@
+node_modules/
+dist/
+build/
+*.log
+
+# Never commit machine-specific or secret material.
+# The SQL password lives in %APPDATA%\Grow Board, not here.
+config.local.json
+.env

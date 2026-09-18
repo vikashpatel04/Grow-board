@@ -1,0 +1,87 @@
+{
+  "name": "grow-board",
+  "productName": "Grow Board",
+  "version": "1.0.0",
+  "description": "Growth dashboard for Dhanalakshmi Textiles - read-only over the POS database",
+  "main": "src/main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --dev",
+    "check": "node tools/check-connection.js",
+    "probe": "node tools/probe-metrics.js",
+    "selftest": "electron . --selftest",
+    "build": "node tools/make-icon.js && electron-builder --win --x64 --publish never",
+    "pack": "electron-builder --win --dir",
+    "test:readonly": "node tools/test-readonly.js",
+    "release": "node tools/make-icon.js && electron-builder --win --x64 --publish always",
+    "icon": "node tools/make-icon.js"
+  },
+  "author": "Dhanalakshmi Textiles",
+  "license": "UNLICENSED",
+  "dependencies": {
+    "electron-updater": "^6.8.9",
+    "mssql": "^11.0.2"
+  },
+  "devDependencies": {
+    "electron": "^33.2.0",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "in.dlt.growboard",
+    "productName": "Grow Board",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "src/**/*",
+      "config.json",
+      "!node_modules/.cache",
+      "!dist",
+      "!tools",
+      "!build"
+    ],
+    "extraResources": [
+      {
+        "from": "config.json",
+        "to": "config.json"
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "artifactName": "GrowBoard-Setup-${version}.${ext}",
+      "icon": "build/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Grow Board",
+      "deleteAppDataOnUninstall": false,
+      "differentialPackage": true,
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico",
+      "installerHeaderIcon": "build/icon.ico"
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "OWNER",
+        "repo": "grow-board",
+        "releaseType": "release"
+      }
+    ]
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/OWNER/grow-board.git"
+  }
+}

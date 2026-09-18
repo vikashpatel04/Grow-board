@@ -1,0 +1,47 @@
+{
+  "_comment": "Grow Board settings. READ-ONLY - this app never writes to the POS database. The SQL password is deliberately NOT stored here: release builds are published publicly for auto-update. Enter it once on the Settings page; it is kept per-machine under %APPDATA%\\Grow Board.",
+  "sql": {
+    "server": "DESKTOP-H2T0P2H",
+    "adminDb": "DLTAdmindb",
+    "user": "dev_readonly",
+    "password": "",
+    "port": null,
+    "instanceName": null
+  },
+  "business": {
+    "companyId": "DLT",
+    "openHour": 8,
+    "closeHour": 22,
+    "weeklyOffDay": null,
+    "currency": "\u20b9"
+  },
+  "goal": {
+    "growthTargetPct": 5,
+    "lookbackWeeks": 6,
+    "minGoal": 5000
+  },
+  "notifications": {
+    "enabled": true,
+    "morningGoal": "09:30",
+    "middayCheck": "14:00",
+    "eveningPush": "18:00",
+    "closingResult": "21:30",
+    "weeklyReviewDay": 1,
+    "weeklyReviewTime": "10:00"
+  },
+  "app": {
+    "startMinimised": false,
+    "autoStart": true,
+    "refreshSeconds": 60,
+    "theme": "dark"
+  },
+  "update": {
+    "enabled": false,
+    "owner": "",
+    "repo": "",
+    "allowPrerelease": false,
+    "autoDownload": true,
+    "checkEveryHours": 6,
+    "_comment": "Set enabled=true and fill owner/repo with your GitHub account and repository name to switch auto-update on."
+  }
+}
