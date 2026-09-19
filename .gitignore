@@ -7,3 +7,4 @@ build/
 # The SQL password lives in %APPDATA%\Grow Board, not here.
 config.local.json
 .env
+dev-app-update.yml

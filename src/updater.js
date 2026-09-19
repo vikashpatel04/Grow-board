@@ -35,17 +35,33 @@ function getState() {
   return { ...state, currentVersion: app.getVersion() };
 }
 
-/** Turn GitHub's markdown release notes into a few readable lines. */
+/**
+ * Turn GitHub's markdown release notes into plain sentences for the dialog.
+ * A Windows message box renders no markup, so leftover **bold** markers or
+ * [link](url) syntax would be read literally by the shop.
+ */
 function cleanNotes(notes) {
   if (!notes) return [];
   const text = Array.isArray(notes)
     ? notes.map(n => (typeof n === 'string' ? n : n.note || '')).join('\n')
     : String(notes);
+
   return text
-    .replace(/<[^>]+>/g, ' ')
+    .replace(/<[^>]+>/g, ' ')                       // html
+    .replace(/```[\s\S]*?```/g, ' ')                // fenced code blocks
     .split(/\r?\n/)
-    .map(l => l.replace(/^[\s*\-#>]+/, '').trim())
-    .filter(Boolean)
+    .map(l => l
+      .replace(/^[\s>]*[-*+]\s+/, '')               // list bullet
+      .replace(/^\s*#{1,6}\s+/, '')                 // heading
+      .replace(/^\s*\d+\.\s+/, '')                  // numbered item
+      .replace(/!\[[^\]]*\]\([^)]*\)/g, '')         // images
+      .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')      // links -> their text
+      .replace(/(\*\*|__)(.*?)\1/g, '$2')           // bold
+      .replace(/(\*|_)(?=\S)(.*?)(?<=\S)\1/g, '$2') // italic
+      .replace(/`([^`]*)`/g, '$1')                  // inline code
+      .replace(/\s+/g, ' ')
+      .trim())
+    .filter(l => l && l !== '---')
     .slice(0, 8);
 }
 
