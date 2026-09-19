@@ -381,6 +381,8 @@ async function runSelfTest() {
   const pages = ['today', 'actions', 'growth', 'profit', 'stock',
                  'suppliers', 'customers', 'health', 'settings'];
   const errors = [];
+  const report = [];
+  const say = (line) => { console.log(line); report.push(line.trim()); };
   win.webContents.on('console-message', (_e, level, message) => {
     if (level >= 2) errors.push(message);
   });
@@ -401,7 +403,7 @@ async function runSelfTest() {
     const notice = /notice bad|Could not load this page/.test(html);
     const bad = broke || empty || notice;
     if (bad) failed++;
-    console.log(`  ${bad ? '[FAIL]' : '[ok]  '} ${p.padEnd(11)} ${String(html.length).padStart(7)} chars` +
+    say(`  ${bad ? '[FAIL]' : '[ok]  '} ${p.padEnd(11)} ${String(html.length).padStart(7)} chars` +
                 (broke ? `  error: ${errors[before]}` : '') +
                 (empty && !broke ? '  rendered nothing' : '') +
                 (notice && !broke && !empty ? '  rendered an error notice' : ''));
@@ -409,8 +411,23 @@ async function runSelfTest() {
   console.log(`\n  ${pages.length - failed}/${pages.length} pages rendered.` +
               (errors.length ? `\n  console errors:\n    ${errors.slice(0, 8).join('\n    ')}` : ''));
   console.log('');
+
+  // A packaged Windows GUI build has no reliable stdout, and app.exit() can
+  // discard whatever is still buffered. Write the report to a file as well, and
+  // flush before exiting so `npm run selftest` output is never silently lost.
+  const reportPath = path.join(app.getPath('userData'), 'selftest-report.txt');
+  try {
+    fs.writeFileSync(reportPath,
+      `Grow Board self-test  ${new Date().toISOString()}\n` +
+      `version ${app.getVersion()}\n\n` + report.join('\n') +
+      `\n\n${pages.length - failed}/${pages.length} pages rendered.\n` +
+      (errors.length ? `\nconsole errors:\n  ${errors.join('\n  ')}\n` : ''), 'utf8');
+    console.log(`  report written to ${reportPath}\n`);
+  } catch { /* the console output above is enough */ }
+
   app.isQuitting = true;
-  app.exit(failed ? 1 : 0);
+  const done = () => app.exit(failed ? 1 : 0);
+  if (!process.stdout.write('')) process.stdout.once('drain', done); else setTimeout(done, 120);
 }
 
 /* --------------------------------------------------------------- auto start */
@@ -429,7 +446,10 @@ function applyAutoStart() {
 
 /* --------------------------------------------------------------------- boot */
 
-const single = app.requestSingleInstanceLock();
+// The self-test must never be blocked by an already-running copy: if it were,
+// it would quit with exit code 0 and look like a pass. It opts out of the lock.
+const isSelfTest = process.argv.includes('--selftest');
+const single = isSelfTest || app.requestSingleInstanceLock();
 if (!single) {
   app.quit();
 } else {
@@ -443,8 +463,7 @@ if (!single) {
 
     try { await db.connect(config); } catch (e) { lastError = e.message; }
 
-    const selfTest = process.argv.includes('--selftest');
-    if (selfTest) { createWindow(false); return runSelfTest(); }
+    if (isSelfTest) { createWindow(false); return runSelfTest(); }
 
     const startHidden = process.argv.includes('--tray') || (config.app && config.app.startMinimised);
     createWindow(!startHidden);
