@@ -13,7 +13,7 @@
     "build": "node tools/make-icon.js && electron-builder --win --x64 --publish never",
     "pack": "electron-builder --win --dir",
     "test:readonly": "node tools/test-readonly.js",
-    "release": "node tools/make-icon.js && electron-builder --win --x64 --publish always",
+    "release": "node tools/make-icon.js && with-gh-token electron-builder --win --x64 --publish always",
     "icon": "node tools/make-icon.js"
   },
   "author": "Dhanalakshmi Textiles",
