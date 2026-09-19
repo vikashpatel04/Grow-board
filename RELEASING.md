@@ -62,49 +62,52 @@ Because the repository is public, the shop PC needs no token or login to
 receive updates. Verified against the live repository: the app connects, finds
 no release yet, and stays silent rather than showing an error.
 
-### Does GitHub Desktop cover publishing?
+### Why GitHub Desktop alone was not enough
 
-**Partly.** GitHub Desktop installs Git Credential Manager, which is why
-`git push` works here with no prompt. But publishing a *release* does not go
-through git - electron-builder uploads the files through the GitHub REST API,
-and that needs a token in `GH_TOKEN`. Git Credential Manager does not expose
-one.
+GitHub Desktop installs Git Credential Manager, which is why `git push` works
+with no prompt. But publishing a *release* does not go through git -
+electron-builder uploads through the GitHub REST API and needs a token in
+`GH_TOKEN`, which Credential Manager does not expose. GitHub CLI closes that
+gap, once, for every project.
 
-So there are two ways to publish, and the first needs nothing at all.
+### Publishing is set up machine-wide
 
-#### Option A - upload in the browser (no token, no CLI)
+GitHub CLI is installed and `C:\Users\Admin\bin\with-gh-token` is on your PATH,
+so **this works in every project on this PC, not just Grow Board**.
 
-1. Run `npm run build`.
-2. Go to <https://github.com/vikashpatel04/Grow-board/releases/new>.
-3. Tag: `v1.0.0` (must match the version in `package.json`, with a leading `v`).
-4. Title and description: write what changed in plain words - the shop reads
-   this text in the update prompt.
+One-time, once per machine:
+
+```bash
+gh auth login          # opens the browser; choose HTTPS and authorise
+gh auth setup-git      # routes git push/pull through gh for every repo
+```
+
+After that, in any project:
+
+```bash
+npm run release        # builds and publishes to GitHub Releases
+```
+
+`with-gh-token` reads the token fresh from Windows Credential Manager, hands it
+to the build for that one command, and discards it. Nothing secret is written
+to a file, the registry or your shell, so a token can never end up in a commit.
+See `C:\Users\Admin\bin\README.md`.
+
+#### If you would rather not use the CLI
+
+Everything is already built, so you can publish by hand instead:
+
+1. `npm run build`
+2. Go to <https://github.com/vikashpatel04/Grow-board/releases/new>
+3. Tag: `v1.0.0` (must match `package.json`, with a leading `v`)
+4. Title and description: plain words - the shop reads this in the update prompt
 5. Drag in **all three** files from `D:\Grow-board\dist\`:
    - `GrowBoard-Setup-1.0.0.exe`
    - `GrowBoard-Setup-1.0.0.exe.blockmap`
    - `latest.yml`
-6. Publish release.
+6. Publish release
 
-`latest.yml` is the file the app actually polls. Leave it out and updates will
-never appear.
-
-#### Option B - publish from the command line
-
-Create a token at <https://github.com/settings/tokens> with the **`repo`**
-scope (or a fine-grained token with *Contents: read and write* on this
-repository), then once per machine:
-
-```bash
-setx GH_TOKEN "ghp_your_token_here"
-```
-
-Open a new terminal so the variable is picked up, then:
-
-```bash
-npm run release
-```
-
-That builds and uploads all three files in one step.
+`latest.yml` is the file the app polls. Leave it out and updates never appear.
 
 ## 3. Shipping a new version
 
@@ -112,11 +115,8 @@ That builds and uploads all three files in one step.
 # 1. bump the version - auto-update compares this number
 npm version patch          # 1.0.0 -> 1.0.1   (or: minor / major)
 
-# 2a. with a token:
+# 2. build and publish in one step
 npm run release
-
-# 2b. without a token: build, then drag dist\* into a new GitHub release
-npm run build
 ```
 
 `npm version patch` also creates a git commit and a `v1.0.1` tag; push them
