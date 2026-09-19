@@ -4,9 +4,9 @@ Two separate things:
 
 1. **Installing** — putting the app on the shop PC with a Start-menu entry and
    Windows startup. Works today, no accounts needed.
-2. **Auto-update** — the app checking GitHub for new versions. Needs a
-   repository first (see below); until then the app simply never offers an
-   update, with no errors.
+2. **Auto-update** — the app checking GitHub for new versions. Already wired to
+   `vikashpatel04/Grow-board`. It starts working the moment the first release
+   is published; until then the app checks, finds nothing, and stays quiet.
 
 ---
 
