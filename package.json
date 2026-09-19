@@ -74,14 +74,14 @@
     "publish": [
       {
         "provider": "github",
-        "owner": "OWNER",
-        "repo": "grow-board",
+        "owner": "vikashpatel04",
+        "repo": "Grow-board",
         "releaseType": "release"
       }
     ]
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/OWNER/grow-board.git"
+    "url": "https://github.com/vikashpatel04/Grow-board.git"
   }
 }

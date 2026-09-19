@@ -36,12 +36,12 @@
     "theme": "dark"
   },
   "update": {
-    "enabled": false,
-    "owner": "",
-    "repo": "",
+    "enabled": true,
+    "owner": "vikashpatel04",
+    "repo": "Grow-board",
     "allowPrerelease": false,
     "autoDownload": true,
     "checkEveryHours": 6,
-    "_comment": "Set enabled=true and fill owner/repo with your GitHub account and repository name to switch auto-update on."
+    "_comment": "Auto-update reads GitHub Releases at https://github.com/vikashpatel04/Grow-board/releases. Set enabled=false to switch updates off."
   }
 }
