@@ -155,8 +155,8 @@ that text is what the shop reads.
 
 ```bash
 npm run check         # database connection
-npm run probe         # all 20 metrics against the live data
-npm run selftest      # renders all 9 pages, reports any error
+npm run probe         # every metric against the live data, with consistency checks
+npm run selftest      # renders all 9 pages and every Profit view, reports any error
 npm run test:readonly # proves the app cannot write to the POS
 ```
 

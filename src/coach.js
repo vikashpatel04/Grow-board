@@ -45,7 +45,7 @@ async function buildActions(config) {
   const safe = async (fn) => { try { return await fn(); } catch { return null; } };
 
   const [
-    ageing, dead, fast, stock, pay, sup, exp, cov, health, cust, disc, cats, series, wd
+    ageing, dead, fast, stock, pay, sup, exp, cov, health, cust, disc, cats, series, wd, growth
   ] = await Promise.all([
     safe(() => M.stockAgeing()),
     safe(() => M.deadStock(365, 200)),
@@ -60,7 +60,8 @@ async function buildActions(config) {
     safe(() => M.discountLeakage(90)),
     safe(() => M.categoryPerformance(90)),
     safe(() => M.dailySeries(M.iso(M.daysAgo(60)), M.iso(new Date()))),
-    safe(() => M.weekdayProfile())
+    safe(() => M.weekdayProfile()),
+    safe(() => M.growthSummary(config))
   ]);
 
   /* ---------------------------------------------------------- dead stock */
@@ -183,7 +184,9 @@ async function buildActions(config) {
 
   /* --------------------------------------------------------------- margin */
   if (cats && cats.length) {
-    const sized = cats.filter(c => c.revenue > 20000);
+    // Categories selling mostly zero-cost opening stock show a fake 80-100%
+    // margin; leave them out of every margin comparison.
+    const sized = cats.filter(c => c.revenue > 20000 && (c.zeroCostPct || 0) < 10);
     if (sized.length >= 3) {
       const totalGP = sized.reduce((a, c) => a + c.grossProfit, 0);
       const totalTax = sized.reduce((a, c) => a + c.taxable, 0);
@@ -277,6 +280,64 @@ async function buildActions(config) {
           score: 65
         }));
       }
+    }
+  }
+
+  /* ------------------------------------------------ year on year (growth) */
+  if (growth) {
+    const L = growth.levers;
+    const basisNote = growth.basis === 'underlying' ? ' (festival-season days left out of both years)' : '';
+
+    // Fewer pieces per bill: the cheapest growth to win back.
+    if (L.pieces.pct !== null && L.pieces.pct < -2 && L.pieces.effect < -10000) {
+      const value = Math.abs(L.pieces.effect) * (L.price.now / (L.price.was || 1));
+      out.push(action({
+        id: 'basket-shrinking',
+        title: 'Each bill carries fewer pieces than last year',
+        severity: 'warning', theme: 'growth',
+        why: `${L.pieces.now.toFixed(2)} pieces per bill this year against ${L.pieces.was.toFixed(2)} last year${basisNote}. Customers are coming in about as often - they are taking less each time.`,
+        todo: 'Make one add-on per bill the counter habit: innerwear, kids wear, a matching lining or blouse piece. Keep the add-ons within reach of the billing desk and ask on every bill.',
+        impact: value,
+        impactLabel: 'more sales this year so far if pieces per bill were back at last year\'s level (estimate)',
+        where: 'growth',
+        score: 72
+      }));
+    }
+
+    // A category earning less on every rupee - a buying-rate or discount problem.
+    const squeeze = (growth.categories || [])
+      .filter(c => c.cur > 50000 && c.zeroCostNow < 10 && c.zeroCostWas < 10 && c.d.marginEffect < -15000)
+      .sort((a, b) => a.d.marginEffect - b.d.marginEffect)[0];
+    if (squeeze) {
+      out.push(action({
+        id: 'margin-squeeze',
+        title: `${squeeze.label} is earning less on every rupee sold`,
+        severity: 'warning', theme: 'margin',
+        why: `Its margin fell from ${pct(squeeze.marginWas)} to ${pct(squeeze.marginNow)} this year, on ${money(squeeze.cur)} of sales${basisNote}. Sales did not cause this - the gap per piece did.`,
+        todo: `Compare this year's purchase rates for ${squeeze.label} with last year's, and check how much discount it is getting. Renegotiate, or lift the selling price to match the new cost.`,
+        impact: -squeeze.d.marginEffect,
+        impactLabel: 'gross profit lost to the thinner margin this year so far',
+        where: 'profit',
+        score: 74
+      }));
+    }
+
+    // The festival ahead - the biggest selling stretch of the year.
+    const s = growth.season;
+    if (s && s.lastYear && s.daysToGo <= 35) {
+      const ly = s.lastYear;
+      const multiple = ly.before.revenue ? ly.total.revenue / ly.before.revenue : null;
+      out.push(action({
+        id: 'season-ahead',
+        title: s.inProgress ? `${s.name} season is on - ${s.daysToGo} days to go` : `${s.name} is ${s.daysToGo} days away`,
+        severity: s.daysToGo <= 14 ? 'serious' : 'warning', theme: 'growth',
+        why: `Last year's season brought ${money(ly.total.revenue)}${multiple ? ` - ${multiple.toFixed(1)} times the 30 days before it` : ''}.` +
+          (s.soFar ? ` So far this season: ${money(s.soFar.cur.revenue)} against ${money(s.soFar.prev.revenue)} at the same point last year.` : ''),
+        todo: `On the Growth page, open "See what sold last season" and check every one of last year's top sellers is on the shelf in the same price band. Order the gaps this week - suppliers run short close to ${s.name}.`,
+        impactLabel: 'the biggest selling stretch of the year',
+        where: 'growth',
+        score: 82
+      }));
     }
   }
 

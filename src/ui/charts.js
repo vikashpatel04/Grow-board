@@ -121,23 +121,41 @@ function lineChart(host, opt) {
     g.appendChild(t);
   }
 
+  // A missing value (a month not reached yet) breaks the line rather than
+  // dropping it to zero, which would read as a collapse.
+  const has = v => v !== null && v !== undefined && !isNaN(v);
+  const placed = [];
   for (const s of series) {
-    const pts = s.values.map((v, i) => [xOf(i), yOf(v === null || isNaN(v) ? min : v)]);
-    if (s.area) {
-      const d = `M ${pts[0][0]} ${yOf(min)} ` + pts.map(p => `L ${p[0]} ${p[1]}`).join(' ') +
-                ` L ${pts[pts.length - 1][0]} ${yOf(min)} Z`;
-      g.appendChild(el('path', { d, fill: s.color, 'fill-opacity': 0.12, stroke: 'none' }));
+    const segs = [];
+    let cur = null;
+    s.values.forEach((v, i) => {
+      if (!has(v)) { cur = null; return; }
+      if (!cur) { cur = []; segs.push(cur); }
+      cur.push([xOf(i), yOf(v)]);
+    });
+    if (!segs.length) continue;
+    for (const pts of segs) {
+      if (s.area) {
+        const d = `M ${pts[0][0]} ${yOf(min)} ` + pts.map(p => `L ${p[0]} ${p[1]}`).join(' ') +
+                  ` L ${pts[pts.length - 1][0]} ${yOf(min)} Z`;
+        g.appendChild(el('path', { d, fill: s.color, 'fill-opacity': 0.12, stroke: 'none' }));
+      }
+      const d = pts.map((p, i) => `${i ? 'L' : 'M'} ${p[0]} ${p[1]}`).join(' ');
+      g.appendChild(el('path', {
+        d, fill: 'none', stroke: s.color, 'stroke-width': 2,
+        'stroke-linejoin': 'round', 'stroke-linecap': 'round',
+        'stroke-dasharray': s.dashed ? '5 4' : null
+      }));
     }
-    const d = pts.map((p, i) => `${i ? 'L' : 'M'} ${p[0]} ${p[1]}`).join(' ');
-    g.appendChild(el('path', {
-      d, fill: 'none', stroke: s.color, 'stroke-width': 2,
-      'stroke-linejoin': 'round', 'stroke-linecap': 'round',
-      'stroke-dasharray': s.dashed ? '5 4' : null
-    }));
-    // direct label at the final point (selective labelling)
-    const last = pts[pts.length - 1];
+    // direct label at the final point (selective labelling), nudged below
+    // the point when another label already sits there
+    const lastSeg = segs[segs.length - 1];
+    const last = lastSeg[lastSeg.length - 1];
     if (series.length > 1) {
-      const t = el('text', { x: last[0] - 4, y: last[1] - 9, class: 'series-label', 'text-anchor': 'end' });
+      let y = last[1] - 9;
+      if (placed.some(p => Math.abs(p.y - y) < 13 && Math.abs(p.x - last[0]) < 90)) y = last[1] + 17;
+      placed.push({ x: last[0], y });
+      const t = el('text', { x: last[0] - 4, y, class: 'series-label', 'text-anchor': 'end' });
       t.textContent = s.name;
       g.appendChild(t);
     }
@@ -161,13 +179,14 @@ function lineChart(host, opt) {
     cross.setAttribute('x1', xOf(i)); cross.setAttribute('x2', xOf(i));
     cross.style.display = '';
     series.forEach((s, k) => {
+      if (!has(s.values[i])) { dots[k].style.display = 'none'; return; }
       dots[k].setAttribute('cx', xOf(i));
-      dots[k].setAttribute('cy', yOf(s.values[i] || 0));
+      dots[k].setAttribute('cy', yOf(s.values[i]));
       dots[k].style.display = '';
     });
     const rows = series.map(s =>
       `<div class="tip-row"><span class="tip-dot" style="background:${s.color}"></span>
-       <span class="tip-name">${s.name}</span><span class="tip-val">${fmt(s.values[i])}</span></div>`).join('');
+       <span class="tip-name">${s.name}</span><span class="tip-val">${has(s.values[i]) ? fmt(s.values[i]) : '-'}</span></div>`).join('');
     showTip(`<div class="tip-title">${labels[i]}</div>${rows}`, ev.clientX, ev.clientY);
   });
   hit.addEventListener('mouseleave', () => {
@@ -262,6 +281,10 @@ function hbarChart(host, opt) {
         <div class="hbar-fill" style="width:${(Math.abs(d.value) / max) * 100}%;background:${c}"></div>
       </div>
       <div class="hbar-value">${fmt(d.value)}</div>`;
+    if (opt.onClick) {
+      row.classList.add('clickable');
+      row.addEventListener('click', () => { hideTip(); opt.onClick(d); });
+    }
     if (d.note) {
       row.title = d.note;
       row.addEventListener('mousemove', ev => showTip(

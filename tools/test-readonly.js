@@ -23,6 +23,14 @@ const attempts=[
       if(guard) blocked++;
     }
   }
+  // the cross-year path (every financial-year database at once) goes through the same guard
+  try { await db.queryRange('2021-04-01', '2099-03-31', "DELETE FROM {{YEAR}}.sales WHERE BILLDATE >= @from", {}, { ttlMs: 0 }); console.log('  [LEAKED] queryRange DELETE'); }
+  catch (e) {
+    const guard = /read-only/.test(e.message);
+    console.log(`  [${guard ? 'blocked' : 'sql-error'}] DELETE across every year database`.padEnd(62) + (guard ? '' : e.message.slice(0, 40)));
+    if (guard) blocked++;
+  }
+  attempts.push('queryRange');
   // and prove a legitimate read still works
   const r = await db.query("SELECT COUNT(*) AS c FROM {{YEAR}}.sales",{},{ttlMs:0});
   console.log(`\n  ${blocked}/${attempts.length} write attempts blocked by the guard`);

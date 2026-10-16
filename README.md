@@ -18,8 +18,8 @@ continues to happen in the POS exactly as now.
 |---|---|
 | **Today** | Am I on track right now? Auto-goal, live pace against your own hourly pattern, tender mix, and the two things to do today. |
 | **Focus** | What should I do next? Every issue found in your data, ranked, each with the evidence, a concrete next step and a rupee estimate. |
-| **Growth** | Where are sales going? 90-day trend, best and worst weekday, busiest hour, and month-by-month across financial years. |
-| **Profit** | What do I actually keep? Gross margin by category, discount leakage, and recorded expenses. |
+| **Growth** | Am I really growing? This year so far against the same dates last year — or, when a festival falls on a different date, like for like with festival-season days left out of both years. Splits the change into bills × pieces per bill × price per piece, reads the last 30 days three ways, shows the festival season ahead, which categories grew and shrank, month by month against last year, and daily sales against the same weekday a year ago. |
+| **Profit** | What do I keep, and where? Pick any period or festival season and slice gross profit by category, item, price band, supplier, size, month, week, day, weekday or hour — each against last year, with *why* it moved (sold more or less, or a better or thinner margin). Click a row to drill down: a category, then its items, then one item by month. Every view opens with what the rows say. |
 | **Stock** | What is my cash doing? Ageing bands, the dead stock to clear first, and the fast sellers about to run out. |
 | **Suppliers** | Who do I owe, and who earns their shelf space? Payables with ageing, plus a margin and sell-through scorecard per supplier. |
 | **Customers** | Who is buying? Currently almost nothing — and the page explains exactly why and what to change. |
@@ -99,12 +99,18 @@ Start-menu and desktop shortcuts. Install it on the counter PC and turn on
 
 ```bash
 npm run check      # connection only
-npm run probe      # runs all 20 metrics against the live DB and prints the numbers
-npm run selftest   # renders all 9 pages headlessly and reports any error
+npm run probe      # runs every metric against the live DB, prints the numbers, checks they add up
+npm run selftest   # renders all 9 pages and every Profit view headlessly, reports any error
+npm run test:readonly   # proves the database layer refuses writes, across year databases too
 ```
 
 `selftest` is safe to run while the shop is trading — it opens no visible window
-and touches nothing.
+and touches nothing in the POS. Add `-- --snap=<folder>` to save a screenshot of
+every view it checks.
+
+`probe` checks more than "it ran": the three growth levers add up exactly to the
+change, every Profit slice adds up to the same total and reconciles with the
+ledger, and a date range across 1 April reads both year databases.
 
 ---
 
@@ -119,6 +125,8 @@ changed on the Settings page is saved separately and overrides the file.
             "user": "dev_readonly", "password": "" },
   "business": { "openHour": 8, "closeHour": 22 },
   "goal": { "growthTargetPct": 5, "lookbackWeeks": 6, "minGoal": 5000 },
+  "festivals": { "list": [ { "name": "Deepavali", "leadDays": 30,
+                             "dates": ["2025-10-20", "2026-11-08", "..."] } ] },
   "notifications": { "morningGoal": "09:30", "middayCheck": "14:00",
                      "eveningPush": "18:00", "closingResult": "21:30" },
   "app": { "autoStart": true, "startMinimised": false, "refreshSeconds": 60 },
@@ -128,6 +136,15 @@ changed on the Settings page is saved separately and overrides the file.
 
 The app resolves the current financial-year database automatically from
 `DLTAdmindb.dbo.dbmaster`, so it keeps working on 1 April without any change.
+
+**Festival dates.** Deepavali was 20 Oct in 2025 and falls on 8 Nov in 2026, so
+comparing the same dates a year apart sets a festival rush against an ordinary
+fortnight. `festivals` lists each festival's dates (Tamil Nadu observance) and how
+many days of shopping run-up count as its season. Growth and Profit use them to
+line seasons up, and to say when a comparison is distorted. Add each new year's
+dates from the government holiday list; the Settings page shows the dates in use
+and flags a festival with no next date. Fixed-date seasons (Aadi, school
+reopening) need no entry — the same dates last year already line them up.
 
 > **Where the password lives.** `password` in `config.json` is deliberately
 > empty and must stay that way. Release builds are published publicly on GitHub
@@ -153,6 +170,16 @@ POS database in detail. The ones that matter most:
 - **Cost comes from the sale movement itself**, so margin is the true cost of the
   lot that was actually sold.
 - **Cancelled rows are excluded everywhere** with `ISNULL(Cancel,'') <> 'Y'`.
+- **Any date range reads every year database it touches.** Each financial year
+  is its own database, so "last 90 days" in May, last year's figures and the
+  daily goal's history all read across the 1 April rollover. Stock and payables
+  are the exception: `ItemTag` and `outstanding` carry their history forward into
+  each new year, so they are read from the live year only — reading them twice
+  would double count.
+- **Line-level sales value is `TAXABLE + GST`, net of returned lines.**
+  `sales.AMOUNT` is the price *before* discount. Line value reconciles with the
+  ledger to round-off (FY26-27 to 15 Oct: ₹34,64,579 on lines, ₹34,62,974 in
+  `saleshead`).
 
 Two checks run continuously and appear on the Data Health page: the ledger must
 balance every day, and the stock cache must match the stock ledger. Both pass
@@ -167,6 +194,7 @@ today. If either ever fails, stop trusting the figures until it is fixed.
 | **Expenses are barely recorded** | Only a couple of trading days in the last month have any expense entry. Every profit figure is therefore **gross** profit. Net profit cannot be calculated until expenses are entered daily in the POS. |
 | **Customers are not captured** | About 3% of bills identify the buyer. No repeat-rate, no offers, no cohorts until this changes. |
 | **Supplier and size coverage** | Resolved through the stock tag: supplier on ~88% of sold lines, size on ~71%. Good for trends, not exact totals. |
+| **Opening stock with no cost** | Lots migrated in 2021 carry a purchase rate of zero, so selling them shows 100% margin — about 8% of this year's sales. The Profit page measures it, marks affected rows "no cost", compares margins on stock with a recorded cost, and estimates how far gross profit is overstated. Margin advice on the Focus page ignores categories dominated by it. |
 | **125 items show negative stock** | Sold without a purchase or opening entry. Stock value and margin are understated for those items. |
 | **Payables run from 2021** | The supplier balance includes anything never marked paid. Confirm against statements before treating it as debt. |
 | **No salesperson data** | The POS records `0` for every sale, so per-staff performance is impossible. |
@@ -182,8 +210,9 @@ wrong number.
 src/
   main.js        Electron main - window, tray, notification schedule, IPC
   preload.js     the narrow bridge the UI is allowed to use
-  db.js          read-only SQL pool, financial-year resolution, query cache
-  metrics.js     every query, one function per question
+  db.js          read-only SQL pool, financial-year resolution, cross-year reads, query cache
+  periods.js     comparison windows and festival seasons - every date rule in one place
+  metrics.js     every query, one function per question; the profit explorer engine
   goals.js       the automatic daily goal and pace calculation
   coach.js       the rules that turn numbers into ranked actions
   store.js       local app settings only - no business data

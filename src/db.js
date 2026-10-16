@@ -98,17 +98,72 @@ async function yearDb(force = false) {
 }
 
 /** All financial years on the server, newest first. Used by trend pages. */
+let yearsCache = { at: 0, list: null };
 async function allYearDbs() {
+  if (yearsCache.list && Date.now() - yearsCache.at < 5 * 60 * 1000) return yearsCache.list;
   const p = await connect(cfg);
   const r = await p.request().query(`
     SELECT dbname, startdate, enddate FROM ${cfg.sql.adminDb}.dbo.dbmaster
     WHERE dbtype = 'T' ORDER BY startdate DESC`);
-  return r.recordset.map(x => ({
+  const list = r.recordset.map(x => ({
     db: x.dbname,
     start: x.startdate,
     end: x.enddate,
     label: fyLabel(x.startdate)
   }));
+  yearsCache = { at: Date.now(), list };
+  return list;
+}
+
+/** dbmaster dates come back as UTC midnight; read them as calendar dates. */
+const ymd = d => {
+  const x = new Date(d);
+  return `${x.getUTCFullYear()}-${String(x.getUTCMonth() + 1).padStart(2, '0')}-${String(x.getUTCDate()).padStart(2, '0')}`;
+};
+
+/**
+ * The financial-year databases a date range touches, each with the slice of
+ * the range that falls inside it. The newest year is open-ended: if the shop
+ * has not rolled over on 1 April, the POS keeps writing into it.
+ */
+async function yearsFor(from, to) {
+  const years = await allYearDbs();
+  const out = [];
+  years.forEach((y, i) => {
+    const start = ymd(y.start);
+    const end = i === 0 ? '9999-12-31' : ymd(y.end);
+    const f = from > start ? from : start;
+    const t = to < end ? to : end;
+    if (f <= t) out.push({ db: y.db, label: y.label, from: f, to: t, live: i === 0 });
+  });
+  return out.reverse();
+}
+
+/**
+ * One read run across every year database a date range touches, rows returned
+ * together. @from and @to are bound per year, clipped to that year.
+ *
+ * ONLY for per-year transaction tables: saleshead, sales, exchange, itemPurch,
+ * SalesEntry. ItemTag and outstanding carry their history forward into each new
+ * year, so a range query over them would count the same movement twice.
+ *
+ * Archive years no longer change, so their results are cached for hours.
+ */
+const ARCHIVE_TTL = 6 * 60 * 60 * 1000;
+async function queryRange(from, to, text, params = {}, opts = {}) {
+  const parts = await yearsFor(from, to);
+  const sets = await Promise.all(parts.map(async y => {
+    // yyyymmdd is the one date literal SQL Server reads the same under every language setting.
+    const bound = { ...params, from: y.from.replace(/-/g, ''), to: y.to.replace(/-/g, '') };
+    try {
+      const rows = await queryIn(y.db, text, bound, { ttlMs: y.live ? (opts.ttlMs ?? 30000) : ARCHIVE_TTL });
+      return opts.tag ? rows.map(r => ({ ...r, _fy: y.label })) : rows;
+    } catch (e) {
+      // A silently skipped year would make growth look like collapse. Say which one failed.
+      throw new Error(`Could not read FY ${y.label} (${y.db}): ${e.message}`);
+    }
+  }));
+  return sets.flat();
 }
 
 function fyLabel(start) {
@@ -170,7 +225,7 @@ async function queryIn(dbName, text, params = {}, opts = {}) {
   return rows;
 }
 
-function clearCache() { resultCache.clear(); }
+function clearCache() { resultCache.clear(); yearsCache = { at: 0, list: null }; }
 
 async function health() {
   const p = await connect(cfg);
@@ -180,6 +235,6 @@ async function health() {
 }
 
 module.exports = {
-  connect, close, isConnected, query, queryIn, yearDb, allYearDbs,
+  connect, close, isConnected, query, queryIn, queryRange, yearDb, allYearDbs, yearsFor,
   yearRange, clearCache, health, fyLabel
 };

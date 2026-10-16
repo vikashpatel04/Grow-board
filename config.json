@@ -20,6 +20,17 @@
     "lookbackWeeks": 6,
     "minGoal": 5000
   },
+  "festivals": {
+    "_comment": "The festivals sales revolve around. Deepavali and Ramzan move every year, so Grow Board compares a season with last year's season rather than the same dates. leadDays is how many days of shopping run-up count as the season, festival day included. Dates are the Tamil Nadu observance - check each new year against the government holiday list and add it here. Fixed-date seasons (Aadi, school reopening) need no entry: the same dates last year already line them up. Deepavali 2026 is 8 Nov, confirmed by the shop.",
+    "list": [
+      { "name": "Deepavali", "leadDays": 30,
+        "dates": ["2021-11-04", "2022-10-24", "2023-11-12", "2024-10-31", "2025-10-20", "2026-11-08", "2027-10-29"] },
+      { "name": "Pongal", "leadDays": 15,
+        "dates": ["2022-01-14", "2023-01-15", "2024-01-15", "2025-01-14", "2026-01-14", "2027-01-15"] },
+      { "name": "Ramzan", "leadDays": 15,
+        "dates": ["2022-05-03", "2023-04-22", "2024-04-11", "2025-03-31", "2026-03-21", "2027-03-10"] }
+    ]
+  },
   "notifications": {
     "enabled": true,
     "morningGoal": "09:30",

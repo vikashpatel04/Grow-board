@@ -12,6 +12,7 @@ const fs = require('fs');
 
 const db = require('./db');
 const M = require('./metrics');
+const P = require('./periods');
 const G = require('./goals');
 const C = require('./coach');
 const store = require('./store');
@@ -332,7 +333,14 @@ function registerIpc() {
   handle('data:payables', () => M.payables());
   handle('data:receivables', () => M.receivables());
   handle('data:suppliers', (d) => M.supplierScorecard(d || 365));
-  handle('data:expenses', (d) => M.expenses(d || 90));
+  handle('data:expenses', (a, b) => (typeof a === 'string' ? M.expenses(a, b) : M.expenses(a || 90)));
+  handle('data:growth', () => M.growthSummary(config));
+  handle('data:explore', (opts) => M.explore(opts || {}, config));
+  handle('data:periods', () => P.presets(config));
+  handle('data:window', (from, to) => {
+    if (!P.isIso(from) || !P.isIso(to) || from > to) throw new Error('Pick a start date on or before the end date.');
+    return P.windowFor(from, to, config);
+  });
   handle('data:expenseCoverage', (d) => M.expenseCoverage(d || 30));
   handle('data:health', () => M.dataHealth());
   handle('data:customerCapture', (d) => M.customerCapture(d || 30));
@@ -391,11 +399,16 @@ async function runSelfTest() {
   await new Promise(r => win.webContents.once('did-finish-load', r));
   await new Promise(r => setTimeout(r, 2500));
 
-  let failed = 0;
-  for (const p of pages) {
+  // --snap[=dir] also saves a full-height screenshot of every view checked.
+  const snapArg = process.argv.find(a => a.startsWith('--snap'));
+  const snapDir = snapArg ? (snapArg.split('=')[1] || path.join(app.getPath('userData'), 'selftest-snaps')) : null;
+  if (snapDir) { fs.mkdirSync(snapDir, { recursive: true }); win.setContentSize(1460, 3800); }
+
+  const wait = ms => new Promise(r => setTimeout(r, ms));
+  let failed = 0, checked = 0;
+  const inspect = async (p, name) => {
+    checked++;
     const before = errors.length;
-    win.webContents.send('navigate', p);
-    await new Promise(r => setTimeout(r, 2600));
     const html = await win.webContents.executeJavaScript(
       `(document.getElementById('page-${p}')||{}).innerHTML || ''`).catch(() => '');
     const broke = errors.length > before;
@@ -403,12 +416,41 @@ async function runSelfTest() {
     const notice = /notice bad|Could not load this page/.test(html);
     const bad = broke || empty || notice;
     if (bad) failed++;
-    say(`  ${bad ? '[FAIL]' : '[ok]  '} ${p.padEnd(11)} ${String(html.length).padStart(7)} chars` +
+    say(`  ${bad ? '[FAIL]' : '[ok]  '} ${name.padEnd(17)} ${String(html.length).padStart(7)} chars` +
                 (broke ? `  error: ${errors[before]}` : '') +
                 (empty && !broke ? '  rendered nothing' : '') +
                 (notice && !broke && !empty ? '  rendered an error notice' : ''));
+    if (snapDir) {
+      const img = await win.webContents.capturePage().catch(() => null);
+      if (img) fs.writeFileSync(path.join(snapDir, `${name.replace(/[^\w-]+/g, '_')}.png`), img.toPNG());
+    }
+  };
+  for (const p of pages) {
+    win.webContents.send('navigate', p);
+    await wait(2600);
+    await inspect(p, p);
   }
-  console.log(`\n  ${pages.length - failed}/${pages.length} pages rendered.` +
+
+  // The Profit page is many views in one: walk every "view by", then one
+  // drill-down, the way a person would - by clicking. The viewer's saved
+  // explorer choice is put back afterwards.
+  const saved = await win.webContents.executeJavaScript(
+    `(() => { try { return localStorage.getItem('gb-explorer'); } catch { return null; } })()`).catch(() => null);
+  win.webContents.send('navigate', 'profit');
+  await wait(2600);
+  const click = sel => win.webContents.executeJavaScript(
+    `(() => { const b = document.querySelector(${JSON.stringify(sel)}); if (!b) return false; b.click(); return true; })()`).catch(() => false);
+  for (const d of ['item', 'price', 'supplier', 'size', 'month', 'week', 'day', 'weekday', 'hour', 'category']) {
+    if (!(await click(`#exBy button[data-by="${d}"]`))) { failed++; checked++; say(`  [FAIL] profit/${d.padEnd(10)} button missing`); continue; }
+    await wait(2200);
+    await inspect('profit', `profit/${d}`);
+  }
+  if (await click('#exTable tr.drill')) { await wait(2200); await inspect('profit', 'profit/drill-down'); }
+  await win.webContents.executeJavaScript(`(() => { try {
+      ${saved === null ? `localStorage.removeItem('gb-explorer')` : `localStorage.setItem('gb-explorer', ${JSON.stringify(saved)})`};
+    } catch {} })()`).catch(() => {});
+
+  console.log(`\n  ${checked - failed}/${checked} views rendered.` +
               (errors.length ? `\n  console errors:\n    ${errors.slice(0, 8).join('\n    ')}` : ''));
   console.log('');
 
@@ -420,7 +462,7 @@ async function runSelfTest() {
     fs.writeFileSync(reportPath,
       `Grow Board self-test  ${new Date().toISOString()}\n` +
       `version ${app.getVersion()}\n\n` + report.join('\n') +
-      `\n\n${pages.length - failed}/${pages.length} pages rendered.\n` +
+      `\n\n${checked - failed}/${checked} views rendered.\n` +
       (errors.length ? `\nconsole errors:\n  ${errors.join('\n  ')}\n` : ''), 'utf8');
     console.log(`  report written to ${reportPath}\n`);
   } catch { /* the console output above is enough */ }
